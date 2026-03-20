@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Email Security Auditor by DCAD</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f4f7f9; padding: 40px 0; font-family: 'Segoe UI', sans-serif; }
+        .audit-card { background: white; border-radius: 12px; box-shadow: 0 4px 25px rgba(0,0,0,0.1); padding: 30px; }
+        code { background: #222; color: #0f0; padding: 15px; display: block; border-radius: 6px; word-break: break-all; margin-top: 10px; font-family: monospace; font-size: 0.9rem; }
+        .logo-img { max-height: 80px; margin-bottom: 20px; }
+        .print-header { display: none; }
+        .print-rec { border: 2px solid #0d6efd; padding: 15px; margin-bottom: 20px; }
+        @media print { 
+            body { padding: 0; background: white; font-size: 11pt; }
+            .no-print { display: none !important; }
+            .audit-card { box-shadow: none; border: none; width: 100%; padding: 10px; margin: 0; }
+            .container { max-width: 100% !important; }
+            code { 
+                background: #f5f5f5 !important; 
+                color: #000 !important; 
+                border: 1px solid #ddd; 
+                padding: 8px; 
+                font-size: 8pt;
+                max-height: none;
+                overflow: visible;
+                white-space: pre-wrap;
+                word-break: break-all;
+            }
+            .print-header { 
+                display: block !important; 
+                text-align: center; 
+                margin-bottom: 20px; 
+                padding-bottom: 15px; 
+                border-bottom: 2px solid #333; 
+            }
+            .print-header img { max-height: 50px; }
+            .print-rec { 
+                border: 2px solid #333; 
+                padding: 12px; 
+                margin-bottom: 15px; 
+                font-size: 10pt;
+            }
+            .print-rec h5 { font-size: 12pt; margin-bottom: 8px; }
+            h4, h6 { color: #333 !important; font-size: 11pt; }
+            .card { border: 1px solid #ddd !important; margin-bottom: 10px; }
+            .card-body { padding: 10px; }
+            .row { margin-bottom: 10px; }
+            .col-md-4, .col-md-6 { padding: 5px; margin-bottom: 5px; }
+            .alert { padding: 8px; font-size: 10pt; }
+            .table { font-size: 9pt; }
+            .table td, .table th { padding: 4px; }
+            .mb-3, .mb-4 { margin-bottom: 10px !important; }
+            .mt-4 { margin-top: 10px !important; }
+            .border-bottom { padding-bottom: 5px; margin-bottom: 10px; }
+            @page { margin: 0.5in; size: portrait; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="audit-card">
+        <div class="text-center no-print">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="DCAD" class="logo-img">
+        </div>
+        <h2 class="text-center mb-4 no-print">Email Security Auditor</h2>
+        <p class="text-center text-muted mb-4 no-print">by DCAD.co.uk</p>
+        
+        <div class="input-group mb-4 no-print">
+            <span class="input-group-text">Domain</span>
+            <input type="text" id="domainIn" class="form-control" placeholder="schoolname.sch.uk">
+            <button class="btn btn-primary px-4" onclick="runAudit()">Audit Domain</button>
+        </div>
+
+        <div class="mb-5 p-3 border rounded bg-light no-print">
+            <h6 class="text-center mb-3">Optional: Translate DMARC RUA (XML) Report</h6>
+            <div class="d-flex justify-content-center">
+                <input type="file" id="ruaFile" class="form-control w-50 me-2">
+                <button class="btn btn-success" onclick="uploadRUA()">Translate XML</button>
+            </div>
+        </div>
+
+        <div class="mb-4 p-3 border rounded bg-light no-print">
+            <h6 class="text-center mb-3">SSL Certificate Checker</h6>
+            <div class="d-flex justify-content-center">
+                <input type="text" id="sslUrl" class="form-control w-50 me-2" placeholder="www.schoolwebsite.org.uk">
+                <button class="btn btn-warning" onclick="checkSSL()">Check SSL</button>
+            </div>
+            <div id="sslResults" class="mt-3" style="display:none;">
+                <div id="sslSummary" class="alert"></div>
+                <table class="table table-bordered table-sm">
+                    <tr><td><b>Hostname</b></td><td id="sslHost"></td></tr>
+                    <tr><td><b>Issuer</b></td><td id="sslIssuer"></td></tr>
+                    <tr><td><b>Valid From</b></td><td id="sslNotBefore"></td></tr>
+                    <tr><td><b>Expires</b></td><td id="sslNotAfter"></td></tr>
+                    <tr><td><b>Days Until Expiry</b></td><td id="sslDaysLeft"></td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div id="results" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 id="resTitle" class="mb-0">Audit Report</h4>
+                <div class="no-print">
+                    <button class="btn btn-outline-dark btn-sm" onclick="exportJSON()">💾 JSON</button>
+                    <button class="btn btn-outline-dark btn-sm" onclick="exportCSV()">📊 CSV</button>
+                    <button class="btn btn-outline-dark btn-sm" onclick="window.print()">📥 PDF</button>
+                </div>
+            </div>
+            <div class="print-header">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="DCAD" style="max-height:60px;">
+                <h3 style="margin-top:15px;">Email Security Audit Report</h3>
+                <p style="color:#666;">Generated by DCAD.co.uk | <span id="printDate"></span></p>
+            </div>
+            <div class="print-rec" id="printRec"></div>
+            <div id="summaryBox"></div>
+            <div class="card border-info mb-4">
+                <div class="card-header bg-info text-white"><b>Expert Recommendation</b></div>
+                <div class="card-body" id="recText"></div>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3"><h6>MX Records</h6><code id="mxRec"></code></div>
+                <div class="col-md-4 mb-3"><h6>SPF Record</h6><code id="spfRec"></code><div id="spfWarnings"></div></div>
+                <div class="col-md-4 mb-3"><h6>DMARC Record</h6><code id="dmarcRec"></code></div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3"><h6>DKIM Records</h6><code id="dkimRec"></code></div>
+                <div class="col-md-6 mb-3"><h6>CNAME Records</h6><code id="cnameRec"></code></div>
+            </div>
+            <div id="ruaSection" class="mt-4" style="display:none;">
+                <h5 class="border-bottom pb-2">Traffic Analysis (RUA Data)</h5>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped mt-2">
+                        <thead class="table-dark"><tr><th>Sending Server</th><th>Count</th><th>SPF</th><th>DKIM</th><th>Action</th></tr></thead>
+                        <tbody id="ruaBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function runAudit() {
+        const domain = document.getElementById('domainIn').value.trim();
+        if(!domain) return alert("Please enter a domain");
+        
+        document.getElementById('ruaSection').style.display = 'none';
+        document.getElementById('ruaBody').innerHTML = '';
+        document.getElementById('ruaFile').value = '';
+        document.getElementById('results').style.display = 'none';
+
+        try {
+            const res = await fetch('/audit', {
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({domain: domain})
+            });
+            const data = await res.json();
+            
+            window.auditData = data;
+            
+            document.getElementById('resTitle').innerText = "Security Audit: " + data.domain;
+            document.getElementById('summaryBox').innerHTML = `
+                <div class="alert alert-primary"><div class="row text-center">
+                    <div class="col-4"><b>Host</b><br>${data.provider}</div>
+                    <div class="col-4 border-start border-end"><b>Reports</b><br>${data.report_to}</div>
+                    <div class="col-4"><b>Policy</b><br>${data.policy}</div>
+                </div></div>`;
+            
+            let rec = "";
+            if (!data.dmarc.valid) {
+                rec = "<span class='text-danger'>🔴 <b>CRITICAL:</b></span> No DMARC record found. Without DMARC, your domain is vulnerable to email spoofing attacks. <b>Action:</b> Create a DMARC record immediately (start with 'p=none' for monitoring).";
+            } else if (data.policy === "None") {
+                rec = "<span class='text-warning'>⚠️ <b>MONITORING ONLY:</b></span> DMARC is set to 'p=none' which only monitors email without taking action. <b>Action:</b> Review your DMARC reports, then upgrade to 'p=quarantine' after confirming legitimate email sources are properly configured.";
+            } else if (data.policy === "Quarantine") {
+                rec = "<span class='text-info'>🔵 <b>PARTIAL PROTECTION:</b></span> DMARC policy is set to quarantine suspicious emails. <b>Action:</b> Consider upgrading to 'p=reject' once you're confident all legitimate email sources are authorized.";
+            } else if (data.policy === "Reject") {
+                rec = "<span class='text-success'>✅ <b>FULL PROTECTION:</b></span> DMARC policy is set to reject unauthorized emails. Your domain is well protected against spoofing.";
+            }
+            
+            if (!data.spf.valid) {
+                rec += "<br><br><span class='text-danger'>⚠️ <b>SPF MISSING:</b></span> No valid SPF record found. <b>Action:</b> Add an SPF record to authorize your email servers.";
+            }
+            
+            if (data.cname && data.cname.length > 0 && !data.cname[0].includes("No")) {
+                rec += "<br><br><span class='text-info'>ℹ️ <b>CNAME RECORDS:</b></span> " + data.cname.length + " email-related CNAME record(s) found. Verify these are correct for your email provider.";
+            }
+            
+            if (data.spf.warnings && data.spf.warnings.length > 0) {
+                rec += "<br><br><span class='text-warning'>⚠️ <b>SPF WARNINGS:</b></span><br>• " + data.spf.warnings.join("<br>• ");
+            }
+            
+            if (!data.mx || data.mx[0].includes("No")) {
+                rec += "<br><br><span class='text-danger'>⚠️ <b>MX MISSING:</b></span> No MX records found. Email may not be configured.";
+            }
+            
+            if (data.dkim && data.dkim.length > 0 && !data.dkim[0].includes("No")) {
+                rec += "<br><br><span class='text-success'>✅ <b>DKIM CONFIGURED:</b></span> " + data.dkim.length + " DKIM selector(s) found.";
+            } else if (data.spf.valid) {
+                rec += "<br><br><span class='text-warning'>⚠️ <b>DKIM MISSING:</b></span> No DKIM records found. Consider adding DKIM for better email security.";
+            }
+            
+            document.getElementById('printDate').innerText = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+            document.getElementById('printRec').innerHTML = "<h5><b>Executive Summary</b></h5>" + rec;
+            document.getElementById('recText').innerHTML = rec;
+            document.getElementById('mxRec').innerText = data.mx.join('\n');
+            document.getElementById('spfRec').innerText = data.spf.record;
+            document.getElementById('spfWarnings').innerHTML = data.spf.warnings.length > 0 
+                ? "<small class='text-warning'>⚠️ " + data.spf.warnings.join('<br>⚠️ ') + "</small>" 
+                : "";
+            document.getElementById('dmarcRec').innerText = data.dmarc.record;
+            document.getElementById('dkimRec').innerText = data.dkim.join('\n');
+            document.getElementById('cnameRec').innerText = data.cname.join('\n');
+            document.getElementById('results').style.display = 'block';
+        } catch (e) { 
+            alert("Audit failed: " + e.message); 
+        }
+    }
+
+    function exportJSON() {
+        if (!window.auditData) return alert("No audit data to export");
+        const blob = new Blob([JSON.stringify(window.auditData, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = window.auditData.domain + '_audit.json';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+    
+    function exportCSV() {
+        if (!window.auditData) return alert("No audit data to export");
+        const d = window.auditData;
+        let csv = "Field,Value\n";
+        csv += `Domain,${d.domain}\n`;
+        csv += `Email Provider,${d.provider}\n`;
+        csv += `DMARC Policy,${d.policy}\n`;
+        csv += `DMARC Report To,${d.report_to}\n`;
+        csv += `SPF Valid,${d.spf.valid}\n`;
+        csv += `SPF Record,"${d.spf.record.replace(/"/g, '""')}"\n`;
+        if (d.spf.warnings.length > 0) {
+            csv += `SPF Warnings,"${d.spf.warnings.join('; ')}"\n`;
+        }
+        csv += `MX Records,"${d.mx.join('; ')}"\n`;
+        csv += `DKIM Records,"${d.dkim.join('; ')}"\n`;
+        csv += `CNAME Records,"${d.cname.join('; ')}"\n`;
+        
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = d.domain + '_audit.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+    
+    async function checkSSL() {
+        const sslUrl = document.getElementById('sslUrl').value.trim();
+        if(!sslUrl) return alert("Please enter a URL");
+        
+        document.getElementById('sslResults').style.display = 'none';
+        
+        try {
+            const res = await fetch('/check_ssl', {
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({url: sslUrl})
+            });
+            const data = await res.json();
+            
+            if (data.error) {
+                alert("SSL Check failed: " + data.error);
+                return;
+            }
+            
+            let statusClass = 'alert-success';
+            let statusText = '✓ Certificate Valid';
+            
+            if (data.days_until_expiry <= 0) {
+                statusClass = 'alert-danger';
+                statusText = '✗ Certificate Expired!';
+            } else if (data.days_until_expiry <= 30) {
+                statusClass = 'alert-danger';
+                statusText = '⚠ Certificate expires in ' + data.days_until_expiry + ' days!';
+            } else if (data.days_until_expiry <= 90) {
+                statusClass = 'alert-warning';
+                statusText = '⚠ Certificate expires in ' + data.days_until_expiry + ' days';
+            }
+            
+            document.getElementById('sslSummary').className = 'alert ' + statusClass;
+            document.getElementById('sslSummary').innerText = statusText;
+            document.getElementById('sslHost').innerText = data.hostname + ':' + data.port;
+            document.getElementById('sslIssuer').innerText = data.issuer;
+            document.getElementById('sslNotBefore').innerText = data.not_before;
+            document.getElementById('sslNotAfter').innerText = data.not_after;
+            document.getElementById('sslDaysLeft').innerText = data.days_until_expiry + ' days';
+            document.getElementById('sslResults').style.display = 'block';
+            
+        } catch (e) { alert("SSL check failed: " + e.message); }
+    }
+</script>
+</body>
+</html>
