@@ -10,7 +10,6 @@ env/
 
 # Build outputs
 build/
-dist/
 *.spec
 
 # IDE
