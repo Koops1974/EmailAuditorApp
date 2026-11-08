@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Email Security Auditor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #070b14;
+            --card: rgba(255,255,255,0.04);
+            --line: rgba(255,255,255,0.09);
+            --text: #e6edf6;
+            --muted: #8b98ad;
+            --accent1: #6366f1;
+            --accent2: #22d3ee;
+            --green: #34d399;
+            --amber: #fbbf24;
+            --red: #f87171;
+            --blue: #60a5fa;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg); color: var(--text);
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            min-height: 100vh; padding: 48px 20px 80px;
+            background-image:
+                radial-gradient(900px 500px at 15% -10%, rgba(99,102,241,0.16), transparent 60%),
+                radial-gradient(800px 500px at 90% 0%, rgba(34,211,238,0.10), transparent 60%);
+        }
+        .wrap { max-width: 1080px; margin: 0 auto; }
+
+        /* ---------- header ---------- */
+        .hero { text-align: center; margin-bottom: 42px; }
+        .hero h1 {
+            font-size: clamp(28px, 4.5vw, 44px); font-weight: 800; letter-spacing: -0.02em;
+            background: linear-gradient(90deg, #fff 30%, var(--accent2) 70%, var(--accent1));
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+        }
+        .hero p { color: var(--muted); margin-top: 10px; font-size: 15px; }
+        .hero .brand { color: var(--accent2); font-weight: 600; }
+
+        /* ---------- cards ---------- */
+        .card {
+            background: var(--card); border: 1px solid var(--line);
+            border-radius: 18px; padding: 28px; margin-bottom: 22px;
+            backdrop-filter: blur(14px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+        }
+        .card h2 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+        .card .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+
+        /* ---------- inputs ---------- */
+        .row-input { display: flex; gap: 10px; flex-wrap: wrap; }
+        input[type=text], textarea {
+            flex: 1; min-width: 220px;
+            background: rgba(0,0,0,0.35); border: 1px solid var(--line);
+            color: var(--text); border-radius: 12px; padding: 13px 16px;
+            font-size: 15px; font-family: inherit; outline: none; transition: border .2s, box-shadow .2s;
+        }
+        textarea { min-height: 120px; font-family: 'JetBrains Mono', monospace; font-size: 13px; resize: vertical; }
+        input:focus, textarea:focus { border-color: var(--accent1); box-shadow: 0 0 0 3px rgba(99,102,241,0.25); }
+        ::placeholder { color: #5a6579; }
+
+        .btn {
+            border: none; cursor: pointer; border-radius: 12px; padding: 13px 26px;
+            font-size: 15px; font-weight: 700; font-family: inherit; color: white;
+            background: linear-gradient(135deg, var(--accent1), #4f46e5);
+            box-shadow: 0 6px 20px rgba(79,70,229,0.45);
+            transition: transform .15s, box-shadow .15s, opacity .2s;
+        }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(79,70,229,0.6); }
+        .btn:disabled { opacity: .5; cursor: wait; }
+        .btn.ghost {
+            background: transparent; border: 1px solid var(--line); box-shadow: none;
+            color: var(--muted); font-weight: 600; padding: 9px 18px; font-size: 13px;
+        }
+        .btn.ghost:hover { color: var(--text); border-color: var(--muted); transform: translateY(-1px); }
+        .btn.ghost.cyan { border-color: rgba(34,211,238,.35); color: var(--accent2); }
+
+        /* ---------- progress ---------- */
+        .progress-shell { display: none; margin-top: 18px; }
+        .progress-track { height: 8px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; }
+        .progress-bar {
+            height: 100%; width: 0%; border-radius: 99px;
+            background: linear-gradient(90deg, var(--accent1), var(--accent2));
+            transition: width .4s ease;
+        }
+        .progress-label { font-size: 13px; color: var(--muted); margin-top: 8px; }
+
+        /* ---------- chips & badges ---------- */
+        .chip { display: inline-block; padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+        .chip.green  { background: rgba(52,211,153,.14); color: var(--green); border: 1px solid rgba(52,211,153,.35); }
+        .chip.blue   { background: rgba(96,165,250,.14); color: var(--blue);  border: 1px solid rgba(96,165,250,.35); }
+        .chip.amber  { background: rgba(251,191,36,.14); color: var(--amber); border: 1px solid rgba(251,191,36,.35); }
+        .chip.red    { background: rgba(248,113,113,.14); color: var(--red);  border: 1px solid rgba(248,113,113,.35); }
+        .chip.grey   { background: rgba(139,152,173,.12); color: var(--muted); border: 1px solid rgba(139,152,173,.3); }
+
+        /* ---------- score ring ---------- */
+        .score-hero { display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
+        .score-ring {
+            --pct: 0; --color: var(--green);
+            width: 128px; height: 128px; border-radius: 50%; position: relative; flex-shrink: 0;
+            background: conic-gradient(var(--color) calc(var(--pct) * 1%), rgba(255,255,255,0.07) 0);
+            display: grid; place-items: center;
+        }
+        .score-ring::before {
+            content: ''; position: absolute; inset: 11px; border-radius: 50%;
+            background: #0b1120; border: 1px solid var(--line);
+        }
+        .score-ring .num { position: relative; font-size: 34px; font-weight: 800; }
+        .score-ring .num small { font-size: 14px; color: var(--muted); font-weight: 600; }
+        .score-meta { flex: 1; min-width: 240px; }
+        .score-meta .domain-name { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 14px; }
+        .stat {
+            background: rgba(0,0,0,0.28); border: 1px solid var(--line);
+            border-radius: 12px; padding: 10px 14px;
+        }
+        .stat b { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 3px; }
+        .stat span { font-size: 14px; font-weight: 600; word-break: break-word; }
+
+        /* ---------- recommendation ---------- */
+        .rec-card { border-left: 3px solid var(--accent2); }
+        .rec-card .card-body, #recText { font-size: 14px; line-height: 1.7; color: #cdd7e4; }
+        .rec-card .card-body b, #recText b { color: var(--text); }
+        .text-danger { color: var(--red) !important; } .text-warning { color: var(--amber) !important; }
+        .text-success { color: var(--green) !important; } .text-info { color: var(--blue) !important; }
+
+        /* ---------- records ---------- */
+        .rec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+        .rec-grid h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 8px; }
+        code {
+            background: #05080f; color: #6ee7a0; padding: 14px; display: block; border-radius: 10px;
+            border: 1px solid var(--line); word-break: break-all; white-space: pre-wrap;
+            font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.6;
+        }
+
+        /* ---------- table ---------- */
+        .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        thead th {
+            text-align: left; padding: 13px 16px; font-size: 11px; text-transform: uppercase;
+            letter-spacing: .07em; color: var(--muted); background: rgba(255,255,255,0.03);
+            cursor: pointer; user-select: none; white-space: nowrap;
+        }
+        thead th:hover { color: var(--text); }
+        tbody td { padding: 13px 16px; border-top: 1px solid rgba(255,255,255,0.05); white-space: nowrap; }
+        tbody tr { cursor: pointer; transition: background .15s; }
+        tbody tr:hover { background: rgba(99,102,241,0.10); }
+        tbody tr.active { background: rgba(99,102,241,0.16); }
+        .ok  { color: var(--green); font-weight: 700; } .no { color: var(--red); font-weight: 700; }
+
+        .portfolio-stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+
+        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+        .toolbar .spacer { flex: 1; }
+
+        .print-header { display: none; }
+        .fade-in { animation: fadeUp .5s ease both; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+        footer { text-align: center; color: #55627a; font-size: 13px; margin-top: 40px; }
+        footer b { color: var(--accent2); }
+
+        /* ---------- print ---------- */
+        @media print {
+            :root { --bg:#fff; --text:#111; --muted:#555; --card:#fff; --line:#ddd; }
+            body { background: #fff !important; color: #111; padding: 0; font-size: 10.5pt; }
+            body::before, body::after { display: none; }
+            .no-print, .toolbar, .progress-shell, textarea { display: none !important; }
+            .card { box-shadow: none; border: 1px solid #ddd; backdrop-filter: none; break-inside: avoid; }
+            .print-header { display: block !important; text-align: center; margin-bottom: 18px; }
+            .print-header img { max-height: 46px; }
+            code { background: #f5f5f5; color: #111; border: 1px solid #ddd; }
+            .score-ring::before { background: #fff; }
+            .stat { background: #f7f7f7; }
+            thead th { background: #eee; color: #333; cursor: default; }
+            tbody td { border-top: 1px solid #ddd; }
+            .chip { border-width: 1px; }
+            .chip.green { color:#067647; background:#defef3; } .chip.red { color:#b42318; background:#fdecec; }
+            .chip.amber { color:#93620a; background:#fdf3d9; } .chip.blue { color:#1447ab; background:#e8f0fe; }
+            .grey { display: none; }
+            @page { margin: 0.55in; }
+        }
+    </style>
+</head>
+<body>
+<div class="wrap">
+
+    <div class="hero">
+        <h1>Email Security Auditor</h1>
+        <p>SPF · DKIM · DMARC intelligence for your entire domain portfolio</p>
+    </div>
+
+    <div class="print-header">
+        <b>Email Security Audit Report</b><br>
+        <span style="color:#666;"><span id="printDate"></span></span>
+    </div>
+
+    <!-- Single domain -->
+    <div class="card no-print">
+        <h2>Single Domain Audit</h2>
+        <div class="sub">Full technical breakdown of one domain's email authentication posture.</div>
+        <div class="row-input">
+            <input type="text" id="domainIn" placeholder="schoolname.sch.uk" onkeydown="if(event.key==='Enter')runAudit()">
+            <button class="btn" id="auditBtn" onclick="runAudit()">Audit Domain</button>
+        </div>
+    </div>
+
+    <!-- Bulk audit -->
+    <div class="card no-print">
+        <h2>Portfolio Audit</h2>
+        <div class="sub">Paste all client domains (one per line) for a portfolio-wide security overview.</div>
+        <textarea id="bulkIn" placeholder="clientone.co.uk&#10;clienttwo.com&#10;schoolname.sch.uk"></textarea>
+        <div class="row-input" style="margin-top:12px;">
+            <button class="btn" id="bulkBtn" onclick="auditAll()">Audit All Domains</button>
+        </div>
+        <div class="progress-shell" id="bulkProgress">
+            <div class="progress-track"><div class="progress-bar" id="bulkBar"></div></div>
+            <div class="progress-label" id="bulkProgressText"></div>
+        </div>
+    </div>
+
+    <!-- Bulk results -->
+    <div class="card" id="bulkResults" style="display:none;">
+        <div class="toolbar">
+            <h2 style="margin:0;">Portfolio Overview</h2>
+            <div class="spacer"></div>
+            <button class="btn ghost cyan no-print" onclick="exportBulkCSV()">Export CSV</button>
+            <button class="btn ghost cyan no-print" onclick="exportBulkJSON()">Export JSON</button>
+            <button class="btn ghost no-print" onclick="window.print()">Print / PDF</button>
+        </div>
+        <div class="portfolio-stats" id="portfolioStats"></div>
+        <div class="table-scroll">
+            <table>
+                <thead><tr>
+                    <th onclick="sortBulk('domain')">Domain</th>
+                    <th onclick="sortBulk('provider')">Provider</th>
+                    <th onclick="sortBulk('spf')">SPF</th>
+                    <th onclick="sortBulk('dkim')">DKIM</th>
+                    <th onclick="sortBulk('policy')">DMARC</th>
+                    <th onclick="sortBulk('rua')">Reports</th>
+                    <th onclick="sortBulk('score')">Score</th>
+                    <th onclick="sortBulk('status')">Status</th>
+                </tr></thead>
+                <tbody id="bulkBody"></tbody>
+            </table>
+        </div>
+        <div class="sub" style="margin-top:12px;">Click any row for the full client report.</div>
+    </div>
+
+    <!-- Single results -->
+    <div id="detailSection" style="display:none;">
+        <div class="card fade-in">
+            <div class="toolbar">
+                <h2 id="resTitle" style="margin:0;">Audit Report</h2>
+                <div class="spacer"></div>
+                <div class="no-print" style="display:flex; gap:8px;">
+                    <button class="btn ghost cyan" onclick="exportJSON()">JSON</button>
+                    <button class="btn ghost cyan" onclick="exportCSV()">CSV</button>
+                    <button class="btn ghost" onclick="window.print()">Print / PDF</button>
+                </div>
+            </div>
+            <div id="summaryBox"></div>
+        </div>
+
+        <div class="card rec-card fade-in">
+            <h2>Expert Recommendation</h2>
+            <div class="print-rec" id="printRec" style="border:none;padding:0;margin:0 0 12px;"></div>
+            <div id="recText"></div>
+        </div>
+
+        <div class="card fade-in">
+            <div class="rec-grid">
+                <div><h3>MX Records</h3><code id="mxRec"></code></div>
+                <div><h3>SPF Record</h3><code id="spfRec"></code><div id="spfWarnings"></div></div>
+                <div><h3>DMARC Record</h3><code id="dmarcRec"></code></div>
+                <div><h3>DKIM Records</h3><code id="dkimRec"></code></div>
+                <div><h3>CNAME Records</h3><code id="cnameRec"></code></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RUA parser -->
+    <div class="card no-print">
+        <h2>DMARC Aggregate Report (RUA) Translator</h2>
+        <div class="sub">Upload a client's DMARC XML report to see exactly which servers are sending mail for them.</div>
+        <div class="row-input">
+            <input type="file" id="ruaFile" style="flex:1; padding:10px 14px;">
+            <button class="btn" onclick="uploadRUA()">Translate XML</button>
+        </div>
+    </div>
+    <div class="card" id="ruaSection" style="display:none;">
+        <h2>Traffic Analysis</h2>
+        <div class="table-scroll" style="margin-top:12px;">
+            <table>
+                <thead><tr><th>Sending Server</th><th>Count</th><th>SPF</th><th>DKIM</th><th>Action</th></tr></thead>
+                <tbody id="ruaBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <footer>Email Security Auditor &nbsp;·&nbsp; Runs entirely in your browser via DNS-over-HTTPS</footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
