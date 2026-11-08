@@ -66,6 +66,7 @@ const DNS_HOSTS = [
     ['fasthosts', 'Fasthosts'], ['ionos', 'IONOS'], ['ui-dns', 'IONOS'], ['123-reg', '123 Reg'], ['netnames', 'Netnames'],
     ['namesprotection', 'Namesprotection'], ['krystal', 'Krystal'], ['heartinternet', 'Heart Internet'],
     ['ns1.net', 'NS1'], ['dnsv1', 'Akamai'], ['squarespace', 'Squarespace'], ['parastone', 'Parastone'],
+    ['ifl.net', 'RM (Research Machines)'], ['rmplc', 'RM (Research Machines)'],
     ['anycast', 'ClouDNS'], ['brandedns', 'CentralNic'], ['nomin', 'Nominet'], ['zoneedit', 'ZoneEdit']
 ];
 
