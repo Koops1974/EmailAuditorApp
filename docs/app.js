@@ -2,7 +2,7 @@
  * All DNS lookups run in the browser via DNS-over-HTTPS (Google, 8.8.8.8).
  */
 const DNS_URL = 'https://dns.google/resolve';
-const RR_TYPES = { TXT: 16, MX: 15, CNAME: 5, PTR: 12 };
+const RR_TYPES = { TXT: 16, MX: 15, CNAME: 5, PTR: 12, NS: 2 };
 
 const DKIM_SELECTORS = ['default', 'selector1', 'selector2', 'selector3', 'key1', 'key2',
     'dkim', 'dkim1', 'dkim2', 'TEN', 'TEN2', 'google', 'microsoft'];
@@ -25,6 +25,10 @@ async function dnsQuery(name, type) {
 
 function cleanTxt(txt) {
     return txt.replace(/^"|"$/g, '').replace(/" "/g, '');
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function analyzeSpf(txt) {
@@ -53,12 +57,39 @@ function detectProvider(txt) {
     return 'Unknown / On-Premise';
 }
 
+const DNS_HOSTS = [
+    ['cloudflare', 'Cloudflare'], ['awsdns', 'AWS Route 53'], ['microsoftdns', 'Azure DNS'],
+    ['dnsazure', 'Azure DNS'], ['azure-dns', 'Azure DNS'], ['googledomains', 'Google Domains'], ['gsdns', 'Google Cloud DNS'],
+    ['godaddy', 'GoDaddy'], ['domaincontrol', 'GoDaddy'], ['afternic', 'Afternic'],
+    ['dnsowl', 'Namecheap'], ['registrar-servers', 'Namecheap'], ['cscdns', 'CSC Global'],
+    ['ultradns', 'Verizon UltraDNS'], ['cloudns', 'Oracle Dyn'], ['dnsmadeeasy', 'DNS Made Easy'],
+    ['fasthosts', 'Fasthosts'], ['ionos', 'IONOS'], ['ui-dns', 'IONOS'], ['123-reg', '123 Reg'], ['netnames', 'Netnames'],
+    ['namesprotection', 'Namesprotection'], ['krystal', 'Krystal'], ['heartinternet', 'Heart Internet'],
+    ['ns1.net', 'NS1'], ['dnsv1', 'Akamai'], ['squarespace', 'Squarespace'], ['parastone', 'Parastone'],
+    ['anycast', 'ClouDNS'], ['brandedns', 'CentralNic'], ['nomin', 'Nominet'], ['zoneedit', 'ZoneEdit']
+];
+
+function detectDnsHost(ns) {
+    const joined = ns.join(' ').toLowerCase();
+    for (const [k, v] of DNS_HOSTS) if (joined.includes(k)) return v;
+    if (ns.length) {
+        const p = ns[0].split('.');
+        return p.length >= 2 ? p.slice(-2).join('.') : ns[0];
+    }
+    return 'Unknown';
+}
+
 async function auditDomain(domain) {
-    const [spfTxt, mxRaw, dmarcTxt] = await Promise.all([
+    const [spfTxt, mxRaw, dmarcTxt, nsRaw] = await Promise.all([
         dnsQuery(domain, 'TXT'),
         dnsQuery(domain, 'MX'),
-        dnsQuery(`_dmarc.${domain}`, 'TXT')
+        dnsQuery(`_dmarc.${domain}`, 'TXT'),
+        dnsQuery(domain, 'NS')
     ]);
+
+    // Nameservers / DNS host
+    const ns_records = nsRaw.map(d => d.replace(/\.$/, ''));
+    const dns_host = detectDnsHost(ns_records);
 
     // SPF
     let spf_rec = 'No SPF record found', service = 'Unknown / On-Premise', spf_v = false, spf_warnings = [];
@@ -123,7 +154,8 @@ async function auditDomain(domain) {
     if (!cname_records.length) cname_records = ['No CNAME records found'];
 
     const result = {
-        domain, provider: service, report_to: rua, policy,
+        domain, provider: service, report_to: rua, policy, dns_host,
+        ns: ns_records,
         spf: { record: spf_rec, valid: spf_v, warnings: spf_warnings },
         mx: mx_records, dkim: dkim_records, dkim_selectors,
         dmarc: { record: dmarc_rec, valid: dmarc_v },
@@ -143,7 +175,7 @@ function scoreAudit(d) {
         else if (d.policy === 'Quarantine') s = 30;
         else s = 15;
     }
-    score += s; breakdown.push(['DMARC', s, 40]);
+    score += s; breakdown.push(['DMARC Policy', s, 40]);
 
     s = 0;
     if (d.spf.valid) {
@@ -153,13 +185,13 @@ function scoreAudit(d) {
         else s = 12;
         s = Math.max(0, s - 5 * d.spf.warnings.filter(w => !w.includes('~all')).length);
     }
-    score += s; breakdown.push(['SPF', s, 20]);
+    score += s; breakdown.push(['SPF Hardening', s, 20]);
 
     s = d.dkim_selectors.length > 0 ? 20 : 0;
-    score += s; breakdown.push(['DKIM', s, 20]);
+    score += s; breakdown.push(['DKIM Signing', s, 20]);
 
     s = (d.report_to !== 'Not Configured' && d.dmarc.valid) ? 10 : 0;
-    score += s; breakdown.push(['DMARC Reports (rua)', s, 10]);
+    score += s; breakdown.push(['DMARC Reporting (rua)', s, 10]);
 
     let provider_dkim = '';
     if (d.provider === 'Google Workspace')
@@ -175,13 +207,80 @@ function scoreAudit(d) {
     return { total: score, breakdown, status, provider_dkim };
 }
 
+function buildRecommendation(d) {
+    let rec = '';
+    if (d.score.provider_dkim)
+        rec += `<span class='${d.score.provider_dkim.startsWith('DKIM NOT') ? 'text-danger' : 'text-success'}'><b>${d.provider}:</b></span> ${d.score.provider_dkim}<br><br>`;
+
+    if (!d.dmarc.valid) {
+        rec += "<span class='text-danger'>🔴 <b>CRITICAL:</b></span> No DMARC record found. Without DMARC, your domain is vulnerable to email spoofing attacks. <b>Action:</b> Create a DMARC record immediately (start with 'p=none' for monitoring).";
+    } else if (d.policy === 'None') {
+        rec += "<span class='text-warning'>⚠️ <b>MONITORING ONLY:</b></span> DMARC is set to 'p=none' which only monitors email without taking action. <b>Action:</b> Review your DMARC reports, then upgrade to 'p=quarantine' after confirming legitimate email sources are properly configured.";
+    } else if (d.policy === 'Quarantine') {
+        rec += "<span class='text-info'>🔵 <b>PARTIAL PROTECTION:</b></span> DMARC policy is set to quarantine suspicious emails. <b>Action:</b> Consider upgrading to 'p=reject' once you're confident all legitimate email sources are authorized.";
+    } else if (d.policy === 'Reject') {
+        rec += "<span class='text-success'>✅ <b>FULL PROTECTION:</b></span> DMARC policy is set to reject unauthorized emails. Your domain is well protected against spoofing.";
+    }
+
+    if (!d.spf.valid)
+        rec += "<br><br><span class='text-danger'>⚠️ <b>SPF MISSING:</b></span> No valid SPF record found. <b>Action:</b> Add an SPF record to authorize your email servers.";
+
+    if (d.cname && d.cname.length > 0 && !d.cname[0].includes('No'))
+        rec += `<br><br><span class='text-info'>ℹ️ <b>CNAME RECORDS:</b></span> ${d.cname.length} email-related CNAME record(s) found. Verify these are correct for your email provider.`;
+
+    if (d.spf.warnings && d.spf.warnings.length > 0)
+        rec += "<br><br><span class='text-warning'>⚠️ <b>SPF WARNINGS:</b></span><br>• " + d.spf.warnings.join('<br>• ');
+
+    if (!d.mx || d.mx[0].includes('No'))
+        rec += "<br><br><span class='text-danger'>⚠️ <b>MX MISSING:</b></span> No MX records found. Email may not be configured.";
+
+    if (d.dkim_selectors.length > 0)
+        rec += `<br><br><span class='text-success'>✅ <b>DKIM CONFIGURED:</b></span> ${d.dkim_selectors.length} DKIM selector(s) found (${d.dkim_selectors.join(', ')}).`;
+    else if (d.spf.valid)
+        rec += "<br><br><span class='text-warning'>⚠️ <b>DKIM MISSING:</b></span> No DKIM records found. Consider adding DKIM for better email security.";
+
+    return rec;
+}
+
+/* ---------- Domain list parsing (file upload or textarea) ---------- */
+function parseDomainList(text) {
+    const entries = [];
+    const seen = new Set();
+    for (const line of text.split(/\r?\n/)) {
+        let parts = line.split(/[,\t;]+/).map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
+        if (!parts.length) continue;
+        if (parts.length === 1) parts = parts[0].split(/\s+/).map(s => s.trim()).filter(Boolean);
+        let tenant = parts.length > 1 ? parts.slice(0, -1).join(' ') : '';
+        let domain = parts[parts.length - 1]
+            .replace(/^https?:\/\//i, '').replace(/\/.*$/, '').toLowerCase();
+        if (!domain.includes('.') || /^(domain|website|url|tenant|client|name)$/i.test(domain)) continue;
+        if (seen.has(domain)) continue;
+        seen.add(domain);
+        entries.push({ tenant, domain });
+    }
+    return entries;
+}
+
+async function uploadDomainFile() {
+    const input = document.getElementById('bulkFile');
+    if (!input.files.length) return;
+    try {
+        const text = await input.files[0].text();
+        const entries = parseDomainList(text);
+        if (!entries.length) return alert('No valid domains found in file');
+        document.getElementById('bulkIn').value =
+            entries.map(e => e.tenant ? `${e.tenant}, ${e.domain}` : e.domain).join('\n');
+        document.getElementById('bulkFileInfo').innerText =
+            `${entries.length} domain(s) loaded from ${input.files[0].name}`;
+    } catch (e) {
+        alert('Could not read file: ' + e.message);
+    }
+}
+
 /* ---------- Bulk audit ---------- */
 async function auditAll() {
-    const raw = document.getElementById('bulkIn').value;
-    const domains = [...new Set(raw.split(/[\s,;]+/)
-        .map(s => s.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase())
-        .filter(Boolean))];
-    if (!domains.length) return alert('Please enter at least one domain (one per line)');
+    const entries = parseDomainList(document.getElementById('bulkIn').value);
+    if (!entries.length) return alert('Please enter or upload at least one domain');
 
     const btn = document.getElementById('bulkBtn');
     btn.disabled = true; btn.textContent = 'Auditing...';
@@ -192,13 +291,14 @@ async function auditAll() {
     document.getElementById('bulkBar').style.width = '0%';
 
     const BATCH = 3;
-    for (let i = 0; i < domains.length; i += BATCH) {
-        const batch = await Promise.all(domains.slice(i, i + BATCH).map(auditDomain));
+    for (let i = 0; i < entries.length; i += BATCH) {
+        const batch = await Promise.all(entries.slice(i, i + BATCH).map(e =>
+            auditDomain(e.domain).then(d => { d.tenant = e.tenant; return d; })));
         window.bulkData.push(...batch);
-        const pct = Math.round(window.bulkData.length / domains.length * 100);
+        const pct = Math.round(window.bulkData.length / entries.length * 100);
         document.getElementById('bulkBar').style.width = pct + '%';
         document.getElementById('bulkProgressText').innerText =
-            `Audited ${window.bulkData.length} of ${domains.length} domains (${pct}%)`;
+            `Audited ${window.bulkData.length} of ${entries.length} domains (${pct}%)`;
     }
 
     sortBulk('score', true);
@@ -215,8 +315,10 @@ let bulkSortKey = 'score', bulkSortDir = -1;
 
 function sortValue(d, key) {
     switch (key) {
+        case 'tenant': return (d.tenant || '').toLowerCase();
         case 'domain': return d.domain;
         case 'provider': return d.provider;
+        case 'dns_host': return (d.dns_host || '').toLowerCase();
         case 'spf': return d.spf.valid ? 1 : 0;
         case 'dkim': return d.dkim_selectors.length;
         case 'policy': return POLICY_RANK[d.policy] ?? 0;
@@ -228,7 +330,7 @@ function sortValue(d, key) {
 
 function sortBulk(key, keepDir) {
     if (bulkSortKey === key) { if (!keepDir) bulkSortDir *= -1; }
-    else { bulkSortKey = key; bulkSortDir = key === 'domain' || key === 'provider' ? 1 : -1; }
+    else { bulkSortKey = key; bulkSortDir = ['domain', 'provider', 'tenant', 'dns_host'].includes(key) ? 1 : -1; }
     window.bulkData.sort((a, b) => {
         const va = sortValue(a, key), vb = sortValue(b, key);
         return (va > vb ? 1 : va < vb ? -1 : 0) * bulkSortDir;
@@ -245,8 +347,10 @@ function mark(v) { return v ? '<span class="ok">&#10003;</span>' : '<span class=
 function renderBulk() {
     const rows = window.bulkData.map((d, i) => `
         <tr onclick="showDetail(${i})">
+            <td>${d.tenant ? escapeHtml(d.tenant) : '<span style="color:var(--muted)">—</span>'}</td>
             <td><b>${d.domain}</b></td>
             <td>${d.provider}</td>
+            <td>${escapeHtml(d.dns_host)}</td>
             <td>${mark(d.spf.valid)}</td>
             <td>${mark(d.dkim_selectors.length > 0)}</td>
             <td>${d.policy}</td>
@@ -274,33 +378,122 @@ function showDetail(i) {
     document.getElementById('detailSection').scrollIntoView({ behavior: 'smooth' });
 }
 
+/* ---------- CSV / JSON exports ---------- */
+function downloadFile(name, content, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+}
+
 function exportBulkCSV() {
     if (!window.bulkData || !window.bulkData.length) return alert('No bulk data to export');
-    const header = 'Domain,Provider,SPF Valid,SPF Record,SPF Warnings,DKIM Selectors,DKIM For Provider,DMARC Policy,DMARC Report To,Score,Status\n';
+    const header = 'Tenant,Domain,Provider,DNS Host,Nameservers,SPF Valid,SPF Record,SPF Warnings,DKIM Selectors,DKIM For Provider,DMARC Policy,DMARC Report To,Score,Status\n';
     const esc = v => `"${String(v).replace(/"/g, '""')}"`;
     const rows = window.bulkData.map(d => [
-        d.domain, d.provider, d.spf.valid, d.spf.record, d.spf.warnings.join('; '),
+        d.tenant || '', d.domain, d.provider, d.dns_host, d.ns.join('; '), d.spf.valid, d.spf.record, d.spf.warnings.join('; '),
         d.dkim_selectors.join('; '), d.score.provider_dkim, d.policy, d.report_to,
         d.score.total, d.score.status
     ].map(esc).join(','));
-    const blob = new Blob([header + rows.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'email_security_bulk_report.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile('email_security_bulk_report.csv', header + rows.join('\n'), 'text/csv');
 }
 
 function exportBulkJSON() {
     if (!window.bulkData || !window.bulkData.length) return alert('No bulk data to export');
-    const blob = new Blob([JSON.stringify(window.bulkData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'email_security_bulk_report.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile('email_security_bulk_report.json', JSON.stringify(window.bulkData, null, 2), 'application/json');
+}
+
+/* ---------- Client report (HTML, print-ready) ---------- */
+const REPORT_CSS = `
+body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:#f5f7fa;color:#1a2332;margin:0;padding:24px}
+.rp{background:#fff;max-width:820px;margin:0 auto 24px;padding:40px 44px;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);page-break-after:always}
+.rp:last-child{page-break-after:auto}
+.rp-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #4f46e5;padding-bottom:16px;margin-bottom:24px}
+.rp-head h1{font-size:22px;margin:0;color:#111827}
+.rp-head p{margin:4px 0 0;color:#6b7280;font-size:14px}
+.rp-date{color:#6b7280;font-size:13px;white-space:nowrap}
+.rp-hero{display:flex;gap:24px;align-items:center;margin-bottom:28px;flex-wrap:wrap}
+.rp-score{flex-shrink:0;text-align:center;border:2px solid #e5e7eb;border-radius:12px;padding:16px 22px}
+.rp-score .num{font-size:36px;font-weight:800}
+.rp-score .num small{font-size:14px;color:#9ca3af;font-weight:600}
+.rp-badge{display:inline-block;margin-top:8px;padding:4px 14px;border-radius:99px;font-size:12px;font-weight:700;color:#fff;background:var(--c)}
+.rp-facts{flex:1;min-width:300px;border-collapse:collapse;font-size:14px}
+.rp-facts th{text-align:left;color:#6b7280;font-weight:600;padding:5px 16px 5px 0;white-space:nowrap;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.rp-facts td{padding:5px 0;color:#111827;font-weight:600}
+h2{font-size:15px;color:#111827;border-bottom:1px solid #e5e7eb;padding-bottom:8px;margin:26px 0 14px}
+h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin:16px 0 6px}
+.rp-rec{font-size:13.5px;line-height:1.8;color:#374151}
+.rp-table{width:100%;border-collapse:collapse;font-size:13px}
+.rp-break td{padding:7px 0;border-bottom:1px solid #f1f2f4}
+.rp-break td:first-child{width:220px;font-weight:600;color:#374151}
+.rp-break .barcell{padding:7px 14px}
+.rp-break .bar{height:10px;background:linear-gradient(90deg,#6366f1,#22d3ee);border-radius:99px;min-width:2px}
+.rp-break .pts{text-align:right;width:70px;font-weight:700;color:#111827}
+pre{background:#0f172a;color:#7dd3a0;padding:14px 16px;border-radius:8px;font-size:11.5px;font-family:'JetBrains Mono',Consolas,monospace;white-space:pre-wrap;word-break:break-all;margin:0 0 6px}
+.rp-foot{margin-top:28px;padding-top:14px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:11px;text-align:center}
+.text-danger{color:#b42318}.text-warning{color:#93620a}.text-success{color:#067647}.text-info{color:#1447ab}
+@media print{body{background:#fff;padding:0}.rp{box-shadow:none;border-radius:0;margin:0;padding:20px 0}}
+`;
+
+function reportBodyHTML(d) {
+    const color = STATUS_COLOR[d.score.status];
+    const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const facts = [
+        ['Email Platform', d.provider],
+        ['DNS Host (NS)', d.dns_host],
+        ['DMARC Policy', d.policy],
+        ['Aggregate Reports (rua)', d.report_to],
+        ['SPF Record', d.spf.valid ? 'Present' : 'Missing'],
+        ['DKIM Selectors', d.dkim_selectors.length ? d.dkim_selectors.join(', ') : 'None found'],
+        ['Mail Exchangers (MX)', d.mx.join(', ')]
+    ].map(r => `<tr><th>${r[0]}</th><td>${escapeHtml(r[1])}</td></tr>`).join('');
+    const breakdown = d.score.breakdown.map(([k, v, max]) =>
+        `<tr><td>${k}</td><td class="barcell"><div class="bar" style="width:${v / max * 100}%"></div></td><td class="pts">${v} / ${max}</td></tr>`).join('');
+    const records = [
+        ['Nameservers', d.ns.length ? d.ns.join('\n') : ''],
+        ['SPF', d.spf.record],
+        ['DKIM', d.dkim.join('\n')],
+        ['DMARC', d.dmarc.record],
+        ['CNAME', d.cname.join('\n')]
+    ].filter(([, v]) => v && !v.startsWith('No '))
+        .map(([t, v]) => `<h3>${t} Record${t === 'CNAME' ? 's' : ''}</h3><pre>${escapeHtml(v)}</pre>`).join('');
+    return `<div class="rp">
+        <div class="rp-head">
+            <div><h1>Email Security Audit</h1><p>${d.tenant ? escapeHtml(d.tenant) + ' — ' : ''}${d.domain}</p></div>
+            <span class="rp-date">${date}</span>
+        </div>
+        <div class="rp-hero">
+            <div class="rp-score">
+                <div class="num" style="color:${color}">${d.score.total}<small>/100</small></div>
+                <span class="rp-badge" style="--c:${color}">${d.score.status}</span>
+            </div>
+            <table class="rp-facts">${facts}</table>
+        </div>
+        <h2>Executive Summary &amp; Recommendations</h2>
+        <div class="rp-rec">${buildRecommendation(d)}</div>
+        <h2>Score Breakdown</h2>
+        <table class="rp-table rp-break">${breakdown}</table>
+        <h2>DNS Records</h2>
+        ${records}
+        <div class="rp-foot">Generated by Email Security Auditor · All data retrieved live via DNS-over-HTTPS</div>
+    </div>`;
+}
+
+function reportDocument(bodyInner) {
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Email Security Audit Report</title><style>${REPORT_CSS}</style></head><body>${bodyInner}</body></html>`;
+}
+
+function exportReport() {
+    const d = window.auditData;
+    if (!d) return alert('No audit loaded');
+    downloadFile(`${d.domain}_audit_report.html`, reportDocument(reportBodyHTML(d)), 'text/html');
+}
+
+function exportAllReports() {
+    if (!window.bulkData || !window.bulkData.length) return alert('No bulk data to export');
+    downloadFile('email_security_client_reports.html',
+        reportDocument(window.bulkData.map(reportBodyHTML).join('')), 'text/html');
 }
 
 async function ptrLookup(ip) {
@@ -368,9 +561,10 @@ function renderAudit(data) {
                 <span class="num">${data.score.total}<small>/100</small></span>
             </div>
             <div class="score-meta">
-                <div class="domain-name">${data.domain} &nbsp;${statusBadge(data.score.status)}</div>
+                <div class="domain-name">${data.tenant ? data.tenant + ' — ' : ''}${data.domain} &nbsp;${statusBadge(data.score.status)}</div>
                 <div class="stat-grid">
                     <div class="stat"><b>Email Host</b><span>${data.provider}</span></div>
+                    <div class="stat"><b>DNS Host</b><span>${data.dns_host}</span></div>
                     <div class="stat"><b>DMARC Policy</b><span>${data.policy}</span></div>
                     <div class="stat"><b>Reports To</b><span>${data.report_to}</span></div>
                     <div class="stat"><b>SPF</b><span>${data.spf.valid ? 'Found' : 'Missing'}</span></div>
@@ -379,40 +573,11 @@ function renderAudit(data) {
             </div>
         </div>`;
 
-    let rec = '';
-    if (data.score.provider_dkim)
-        rec += `<span class='${data.score.provider_dkim.startsWith('DKIM NOT') ? 'text-danger' : 'text-success'}'><b>${data.provider}:</b></span> ${data.score.provider_dkim}<br><br>`;
-
-    if (!data.dmarc.valid) {
-        rec += "<span class='text-danger'>🔴 <b>CRITICAL:</b></span> No DMARC record found. Without DMARC, your domain is vulnerable to email spoofing attacks. <b>Action:</b> Create a DMARC record immediately (start with 'p=none' for monitoring).";
-    } else if (data.policy === 'None') {
-        rec += "<span class='text-warning'>⚠️ <b>MONITORING ONLY:</b></span> DMARC is set to 'p=none' which only monitors email without taking action. <b>Action:</b> Review your DMARC reports, then upgrade to 'p=quarantine' after confirming legitimate email sources are properly configured.";
-    } else if (data.policy === 'Quarantine') {
-        rec += "<span class='text-info'>🔵 <b>PARTIAL PROTECTION:</b></span> DMARC policy is set to quarantine suspicious emails. <b>Action:</b> Consider upgrading to 'p=reject' once you're confident all legitimate email sources are authorized.";
-    } else if (data.policy === 'Reject') {
-        rec += "<span class='text-success'>✅ <b>FULL PROTECTION:</b></span> DMARC policy is set to reject unauthorized emails. Your domain is well protected against spoofing.";
-    }
-
-    if (!data.spf.valid)
-        rec += "<br><br><span class='text-danger'>⚠️ <b>SPF MISSING:</b></span> No valid SPF record found. <b>Action:</b> Add an SPF record to authorize your email servers.";
-
-    if (data.cname && data.cname.length > 0 && !data.cname[0].includes('No'))
-        rec += `<br><br><span class='text-info'>ℹ️ <b>CNAME RECORDS:</b></span> ${data.cname.length} email-related CNAME record(s) found. Verify these are correct for your email provider.`;
-
-    if (data.spf.warnings && data.spf.warnings.length > 0)
-        rec += "<br><br><span class='text-warning'>⚠️ <b>SPF WARNINGS:</b></span><br>• " + data.spf.warnings.join('<br>• ');
-
-    if (!data.mx || data.mx[0].includes('No'))
-        rec += "<br><br><span class='text-danger'>⚠️ <b>MX MISSING:</b></span> No MX records found. Email may not be configured.";
-
-    if (data.dkim_selectors.length > 0)
-        rec += `<br><br><span class='text-success'>✅ <b>DKIM CONFIGURED:</b></span> ${data.dkim_selectors.length} DKIM selector(s) found (${data.dkim_selectors.join(', ')}).`;
-    else if (data.spf.valid)
-        rec += "<br><br><span class='text-warning'>⚠️ <b>DKIM MISSING:</b></span> No DKIM records found. Consider adding DKIM for better email security.";
-
+    const rec = buildRecommendation(data);
     document.getElementById('printDate').innerText = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     document.getElementById('printRec').innerHTML = '<h5><b>Executive Summary</b></h5>' + rec;
     document.getElementById('recText').innerHTML = rec;
+    document.getElementById('nsRec').innerText = data.ns.length ? data.ns.join('\n') : 'No nameservers found';
     document.getElementById('mxRec').innerText = data.mx.join('\n');
     document.getElementById('spfRec').innerText = data.spf.record;
     document.getElementById('spfWarnings').innerHTML = data.spf.warnings.length > 0
@@ -441,21 +606,18 @@ async function uploadRUA() {
 
 function exportJSON() {
     if (!window.auditData) return alert('No audit data to export');
-    const blob = new Blob([JSON.stringify(window.auditData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = window.auditData.domain + '_audit.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(window.auditData.domain + '_audit.json', JSON.stringify(window.auditData, null, 2), 'application/json');
 }
 
 function exportCSV() {
     if (!window.auditData) return alert('No audit data to export');
     const d = window.auditData;
     let csv = 'Field,Value\n';
+    if (d.tenant) csv += `Tenant,${d.tenant}\n`;
     csv += `Domain,${d.domain}\n`;
     csv += `Email Provider,${d.provider}\n`;
+    csv += `DNS Host,${d.dns_host}\n`;
+    csv += `Nameservers,"${d.ns.join('; ')}"\n`;
     csv += `Security Score,${d.score.total}/100 (${d.score.status})\n`;
     csv += `DMARC Policy,${d.policy}\n`;
     csv += `DMARC Report To,${d.report_to}\n`;
@@ -466,12 +628,5 @@ function exportCSV() {
     csv += `MX Records,"${d.mx.join('; ')}"\n`;
     csv += `DKIM Records,"${d.dkim.join('; ')}"\n`;
     csv += `CNAME Records,"${d.cname.join('; ')}"\n`;
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = d.domain + '_audit.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(d.domain + '_audit.csv', csv, 'text/csv');
 }

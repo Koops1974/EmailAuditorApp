@@ -212,8 +212,12 @@
     <!-- Bulk audit -->
     <div class="card no-print">
         <h2>Portfolio Audit</h2>
-        <div class="sub">Paste all client domains (one per line) for a portfolio-wide security overview.</div>
-        <textarea id="bulkIn" placeholder="clientone.co.uk&#10;clienttwo.com&#10;schoolname.sch.uk"></textarea>
+        <div class="sub">Upload a domain list (.txt / .csv) or paste below — one per line, or <code style="display:inline;background:none;color:var(--text);padding:0">Tenant, domain</code> for per-client reports.</div>
+        <div class="row-input" style="margin-bottom:12px;">
+            <input type="file" id="bulkFile" accept=".txt,.csv,.tsv" style="flex:1;padding:10px 14px;" onchange="uploadDomainFile()">
+            <span id="bulkFileInfo" style="align-self:center;font-size:13px;color:var(--green);font-weight:600;"></span>
+        </div>
+        <textarea id="bulkIn" placeholder="Acme Ltd, acme.co.uk&#10;North School, northschool.sch.uk&#10;clientthree.com"></textarea>
         <div class="row-input" style="margin-top:12px;">
             <button class="btn" id="bulkBtn" onclick="auditAll()">Audit All Domains</button>
         </div>
@@ -228,6 +232,7 @@
         <div class="toolbar">
             <h2 style="margin:0;">Portfolio Overview</h2>
             <div class="spacer"></div>
+            <button class="btn ghost cyan no-print" onclick="exportAllReports()">All Client Reports</button>
             <button class="btn ghost cyan no-print" onclick="exportBulkCSV()">Export CSV</button>
             <button class="btn ghost cyan no-print" onclick="exportBulkJSON()">Export JSON</button>
             <button class="btn ghost no-print" onclick="window.print()">Print / PDF</button>
@@ -236,8 +241,10 @@
         <div class="table-scroll">
             <table>
                 <thead><tr>
+                    <th onclick="sortBulk('tenant')">Tenant</th>
                     <th onclick="sortBulk('domain')">Domain</th>
-                    <th onclick="sortBulk('provider')">Provider</th>
+                    <th onclick="sortBulk('provider')">Email Host</th>
+                    <th onclick="sortBulk('dns_host')">DNS Host</th>
                     <th onclick="sortBulk('spf')">SPF</th>
                     <th onclick="sortBulk('dkim')">DKIM</th>
                     <th onclick="sortBulk('policy')">DMARC</th>
@@ -258,6 +265,7 @@
                 <h2 id="resTitle" style="margin:0;">Audit Report</h2>
                 <div class="spacer"></div>
                 <div class="no-print" style="display:flex; gap:8px;">
+                    <button class="btn ghost cyan" onclick="exportReport()">Client Report</button>
                     <button class="btn ghost cyan" onclick="exportJSON()">JSON</button>
                     <button class="btn ghost cyan" onclick="exportCSV()">CSV</button>
                     <button class="btn ghost" onclick="window.print()">Print / PDF</button>
@@ -274,6 +282,7 @@
 
         <div class="card fade-in">
             <div class="rec-grid">
+                <div><h3>Nameservers (DNS Host)</h3><code id="nsRec"></code></div>
                 <div><h3>MX Records</h3><code id="mxRec"></code></div>
                 <div><h3>SPF Record</h3><code id="spfRec"></code><div id="spfWarnings"></div></div>
                 <div><h3>DMARC Record</h3><code id="dmarcRec"></code></div>
