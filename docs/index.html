@@ -280,6 +280,35 @@
             <div id="recText"></div>
         </div>
 
+        <!-- DMARC fixer -->
+        <div class="card no-print fade-in">
+            <h2>DMARC Fixer — Copy-Paste Setup</h2>
+            <div class="sub">Enter the email that should receive DMARC reports. We'll generate the exact DNS record for your domain's <b>next</b> security step.</div>
+            <div class="row-input" style="margin-bottom:14px;">
+                <input type="text" id="dmarcEmail" placeholder="Reports to: email@yourdomain.co.uk">
+                <select id="dmarcPct" class="form-select" style="flex:0 0 auto;width:auto;background:rgba(0,0,0,.35);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:0 16px;font-family:inherit;">
+                    <option value="100">Full rollout (100%)</option>
+                    <option value="75">Gradual 75%</option>
+                    <option value="50">Gradual 50%</option>
+                    <option value="25">Gradual 25%</option>
+                </select>
+                <button class="btn" onclick="buildDmarc()">Generate Record</button>
+            </div>
+            <div id="dmarcFixOut" style="display:none;">
+                <div id="dmarcFixStage" class="chip grey" style="margin-bottom:12px;"></div>
+                <div class="stat-grid" style="margin-bottom:14px;">
+                    <div class="stat"><b>Record Type</b><span>TXT</span></div>
+                    <div class="stat"><b>Host / Name</b><span id="dmarcHost"></span></div>
+                </div>
+                <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px;">Value (copy this)</h3>
+                <div style="position:relative;">
+                    <code id="dmarcValue" style="padding-right:96px;"></code>
+                    <button class="btn ghost cyan" style="position:absolute;top:8px;right:8px;padding:6px 14px;" onclick="copyDmarc()">Copy</button>
+                </div>
+                <div class="sub" id="dmarcFixNote" style="margin-top:14px;"></div>
+            </div>
+        </div>
+
         <div class="card fade-in">
             <div class="rec-grid">
                 <div><h3>Nameservers (DNS Host)</h3><code id="nsRec"></code></div>
@@ -314,6 +343,6 @@
     <footer>Email Security Auditor &nbsp;·&nbsp; Runs entirely in your browser via DNS-over-HTTPS</footer>
 </div>
 
-<script src="app.js?v=20261108"></script>
+<script src="app.js?v=20261109"></script>
 </body>
 </html>

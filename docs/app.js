@@ -587,6 +587,76 @@ function renderAudit(data) {
     document.getElementById('dmarcRec').innerText = data.dmarc.record;
     document.getElementById('dkimRec').innerText = data.dkim.join('\n');
     document.getElementById('cnameRec').innerText = data.cname.join('\n');
+
+    // Prefill DMARC fixer email from existing rua if present, reset output
+    const emailBox = document.getElementById('dmarcEmail');
+    if (emailBox) emailBox.value = (data.report_to && data.report_to !== 'Not Configured') ? data.report_to : '';
+    const out = document.getElementById('dmarcFixOut');
+    if (out) out.style.display = 'none';
+}
+
+/* ---------- DMARC Fixer ---------- */
+function dmarcNextStep(policy) {
+    switch (policy) {
+        case 'Missing':
+            return { p: 'none', stage: 'Not set up → Step 1: Monitoring (report only, no mail blocked)',
+                note: "Add this TXT record and leave it for 1–2 weeks. No legitimate email is blocked — it just tells you who is sending mail for you. Review the emailed reports, then come back and generate the Quarantine step." };
+        case 'None':
+            return { p: 'quarantine', stage: 'On report-only → Step 2: Quarantine (suspicious mail sent to spam)',
+                note: "Your SPF/DKIM must be correct first, or legitimate mail could be quarantined. Use the Gradual rollout option (e.g. 25%) to start, confirm no issues in reports, then move to 100%. When stable, come back and generate the Reject (block) step." };
+        case 'Quarantine':
+            return { p: 'reject', stage: 'Report + Quarantine → Step 3: Reject (block spoofing)',
+                note: "This is full enforcement — unauthorised mail is rejected outright. Confirm your DMARC reports show all legitimate senders passing SPF or DKIM before switching, to avoid blocking genuine mail (e.g. parent comms, MIS/banking)." };
+        case 'Reject':
+            return { p: 'reject', stage: 'Already at full enforcement (Reject) — optimal',
+                note: "You are already on the strongest policy. This record keeps reporting to your chosen email. No further step needed." };
+        default:
+            return { p: 'none', stage: 'Monitoring', note: '' };
+    }
+}
+
+function buildDmarc() {
+    const data = window.auditData;
+    if (!data) return alert('Run an audit first');
+    let email = document.getElementById('dmarcEmail').value.trim();
+    if (!email) return alert('Enter the email address that should receive DMARC reports');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('That does not look like a valid email address');
+
+    const step = dmarcNextStep(data.policy);
+    const pct = parseInt(document.getElementById('dmarcPct').value, 10);
+    let rec = `v=DMARC1; p=${step.p};`;
+    if (step.p !== 'none' && pct < 100) rec += ` pct=${pct};`;
+    rec += ` rua=mailto:${email}`;
+
+    document.getElementById('dmarcHost').innerText = `_dmarc.${data.domain}`;
+    document.getElementById('dmarcValue').innerText = rec;
+    document.getElementById('dmarcFixStage').innerText = step.stage;
+    document.getElementById('dmarcFixNote').innerText = step.note;
+    document.getElementById('dmarcFixOut').style.display = 'block';
+    window._dmarcRec = rec;
+}
+
+function copyDmarc() {
+    const text = window._dmarcRec;
+    if (!text) return;
+    const done = () => {
+        const btns = document.querySelectorAll('#dmarcFixOut .btn');
+        if (btns.length) { btns[0].textContent = 'Copied ✓'; setTimeout(() => btns[0].textContent = 'Copy', 1500); }
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+    } else {
+        fallbackCopy(text, done);
+    }
+}
+
+function fallbackCopy(text, done) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    if (done) done();
 }
 
 async function uploadRUA() {
