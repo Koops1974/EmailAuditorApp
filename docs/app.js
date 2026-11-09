@@ -67,6 +67,7 @@ const DNS_HOSTS = [
     ['namesprotection', 'Namesprotection'], ['krystal', 'Krystal'], ['heartinternet', 'Heart Internet'],
     ['ns1.net', 'NS1'], ['dnsv1', 'Akamai'], ['squarespace', 'Squarespace'], ['parastone', 'Parastone'],
     ['ifl.net', 'RM (Research Machines)'], ['rmplc', 'RM (Research Machines)'],
+    ['livedns', 'Schools Broadband'],
     ['anycast', 'ClouDNS'], ['brandedns', 'CentralNic'], ['nomin', 'Nominet'], ['zoneedit', 'ZoneEdit']
 ];
 
