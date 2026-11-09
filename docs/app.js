@@ -604,7 +604,7 @@ function dmarcNextStep(policy) {
                 note: "Add this TXT record and leave it for 1–2 weeks. No legitimate email is blocked — it just tells you who is sending mail for you. Review the emailed reports, then come back and generate the Quarantine step." };
         case 'None':
             return { p: 'quarantine', stage: 'On report-only → Step 2: Quarantine (suspicious mail sent to spam)',
-                note: "Your SPF/DKIM must be correct first, or legitimate mail could be quarantined. Use the Gradual rollout option (e.g. 25%) to start, confirm no issues in reports, then move to 100%. When stable, come back and generate the Reject (block) step." };
+                note: "Your SPF/DKIM must be correct first, or legitimate mail could be quarantined. If you're worried about blocking genuine mail, you can add ' pct=25;' after p=quarantine to apply it to only 25% of failing mail first. When stable, come back and generate the Reject (block) step." };
         case 'Quarantine':
             return { p: 'reject', stage: 'Report + Quarantine → Step 3: Reject (block spoofing)',
                 note: "This is full enforcement — unauthorised mail is rejected outright. Confirm your DMARC reports show all legitimate senders passing SPF or DKIM before switching, to avoid blocking genuine mail (e.g. parent comms, MIS/banking)." };
@@ -624,10 +624,7 @@ function buildDmarc() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('That does not look like a valid email address');
 
     const step = dmarcNextStep(data.policy);
-    const pct = parseInt(document.getElementById('dmarcPct').value, 10);
-    let rec = `v=DMARC1; p=${step.p};`;
-    if (step.p !== 'none' && pct < 100) rec += ` pct=${pct};`;
-    rec += ` rua=mailto:${email}`;
+    let rec = `v=DMARC1; p=${step.p}; rua=mailto:${email}`;
 
     document.getElementById('dmarcHost').innerText = `_dmarc.${data.domain}`;
     document.getElementById('dmarcValue').innerText = rec;
