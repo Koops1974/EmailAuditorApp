@@ -702,3 +702,11 @@ function exportCSV() {
     csv += `CNAME Records,"${d.cname.join('; ')}"\n`;
     downloadFile(d.domain + '_audit.csv', csv, 'text/csv');
 }
+(function () {
+    const param = new URLSearchParams(window.location.search).get('domain');
+    if (!param) return;
+    const input = document.getElementById('domainIn');
+    if (!input) return;
+    input.value = param.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    if (typeof runAudit === 'function') runAudit();
+})();
