@@ -345,7 +345,7 @@ function statusBadge(status) {
 }
 
 function policyLabel(d) {
-    return { Missing: 'Not set up', None: 'None (report only)', Quarantine: 'Quarantine', Reject: 'Reject (block)' }[d.policy] || d.policy;
+    return { Missing: 'Not set up', None: 'Report only', Quarantine: 'Quarantine', Reject: 'Reject (block)' }[d.policy] || d.policy;
 }
 
 function mark(v) { return v ? '<span class="ok">&#10003;</span>' : '<span class="no">&#10007;</span>'; }
