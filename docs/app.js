@@ -629,7 +629,7 @@ function buildDmarc() {
     const step = dmarcNextStep(data.policy);
     let rec = `v=DMARC1; p=${step.p}; rua=mailto:${email}`;
 
-    document.getElementById('dmarcHost').innerText = `_dmarc.${data.domain}`;
+    document.getElementById('dmarcHost').innerText = '_dmarc';
     document.getElementById('dmarcValue').innerText = rec;
     document.getElementById('dmarcFixStage').innerText = step.stage;
     document.getElementById('dmarcFixNote').innerText = step.note;

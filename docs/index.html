@@ -120,6 +120,14 @@
         }
         .stat b { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 3px; }
         .stat span { font-size: 14px; font-weight: 600; word-break: break-word; }
+        .dns-entry { width: 100%; border-collapse: collapse; font-size: 14px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+        .dns-entry th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 12px 16px; white-space: nowrap; vertical-align: top; width: 1%; }
+        .dns-entry td { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.06); color: var(--text); }
+        .dns-entry tr:first-child th, .dns-entry tr:first-child td { border-top: none; }
+        .dns-entry .note { display: block; color: var(--amber); font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; margin-top: 5px; }
+        .dns-entry .muted { color: var(--muted); }
+        .dns-entry code.inline { display: inline; background: rgba(0,0,0,.35); color: #6ee7a0; padding: 3px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; }
+        .dns-entry .value-block { display: block; background: #05080f; color: #6ee7a0; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--line); word-break: break-all; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.5; }
 
         /* ---------- recommendation ---------- */
         .rec-card { border-left: 3px solid var(--accent2); }
@@ -289,16 +297,24 @@
                 <button class="btn" onclick="buildDmarc()">Generate Record</button>
             </div>
             <div id="dmarcFixOut" style="display:none;">
-                <div id="dmarcFixStage" class="chip grey" style="margin-bottom:12px;"></div>
-                <div class="stat-grid" style="margin-bottom:14px;">
-                    <div class="stat"><b>Record Type</b><span>TXT</span></div>
-                    <div class="stat"><b>Host / Name</b><span id="dmarcHost"></span></div>
-                </div>
-                <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px;">Value (copy this)</h3>
-                <div style="position:relative;">
-                    <code id="dmarcValue" style="padding-right:96px;"></code>
-                    <button class="btn ghost cyan" style="position:absolute;top:8px;right:8px;padding:6px 14px;" onclick="copyDmarc()">Copy</button>
-                </div>
+                <div id="dmarcFixStage" class="chip grey" style="margin-bottom:14px;"></div>
+                <table class="dns-entry">
+                    <tr><th>Record Type</th><td><b>TXT</b></td></tr>
+                    <tr>
+                        <th>Host / Name / Subdomain</th>
+                        <td><b id="dmarcHost">_dmarc</b>
+                            <span class="note">Just <code class="inline">_dmarc</code> — do NOT type the full domain name here, or it will break.</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Value / Text / Data</th>
+                        <td>
+                            <code class="value-block" id="dmarcValue"></code>
+                            <button class="btn ghost cyan" style="margin-top:10px;padding:6px 16px;" onclick="copyDmarc()">Copy value</button>
+                        </td>
+                    </tr>
+                    <tr><th>TTL</th><td><b>3600</b> <span class="muted" style="font-size:12px;">(or leave as the default)</span></td></tr>
+                </table>
                 <div class="sub" id="dmarcFixNote" style="margin-top:14px;"></div>
             </div>
         </div>
@@ -337,6 +353,6 @@
     <footer>Email Security Auditor &nbsp;·&nbsp; Runs entirely in your browser via DNS-over-HTTPS</footer>
 </div>
 
-<script src="app.js?v=20261109e"></script>
+<script src="app.js?v=20261109f"></script>
 </body>
 </html>
