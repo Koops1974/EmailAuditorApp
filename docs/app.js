@@ -344,6 +344,10 @@ function statusBadge(status) {
     return `<span class="chip ${STATUS_CHIP[status]}">${status}</span>`;
 }
 
+function policyLabel(d) {
+    return { Missing: 'Not set up', None: 'None (report only)', Quarantine: 'Quarantine', Reject: 'Reject (block)' }[d.policy] || d.policy;
+}
+
 function mark(v) { return v ? '<span class="ok">&#10003;</span>' : '<span class="no">&#10007;</span>'; }
 
 function renderBulk() {
@@ -355,10 +359,9 @@ function renderBulk() {
             <td>${escapeHtml(d.dns_host)}</td>
             <td>${mark(d.spf.valid)}</td>
             <td>${mark(d.dkim_selectors.length > 0)}</td>
-            <td>${d.policy}</td>
+            <td>${policyLabel(d)}</td>
             <td>${mark(d.report_to !== 'Not Configured')}</td>
-            <td><b>${d.score.total}</b>/100</td>
-            <td>${statusBadge(d.score.status)}</td>
+            <td><b>${d.score.total}</b>/100</td>            <td>${statusBadge(d.score.status)}</td>
         </tr>`).join('');
     document.getElementById('bulkBody').innerHTML = rows;
 
@@ -444,7 +447,7 @@ function reportBodyHTML(d) {
     const facts = [
         ['Email Platform', d.provider],
         ['DNS Host (NS)', d.dns_host],
-        ['DMARC Policy', d.policy],
+        ['DMARC Policy', policyLabel(d)],
         ['Aggregate Reports (rua)', d.report_to],
         ['SPF Record', d.spf.valid ? 'Present' : 'Missing'],
         ['DKIM Selectors', d.dkim_selectors.length ? d.dkim_selectors.join(', ') : 'None found'],
@@ -567,7 +570,7 @@ function renderAudit(data) {
                 <div class="stat-grid">
                     <div class="stat"><b>Email Host</b><span>${data.provider}</span></div>
                     <div class="stat"><b>DNS Host</b><span>${data.dns_host}</span></div>
-                    <div class="stat"><b>DMARC Policy</b><span>${data.policy}</span></div>
+                    <div class="stat"><b>DMARC Policy</b><span>${policyLabel(data)}</span></div>
                     <div class="stat"><b>Reports To</b><span>${data.report_to}</span></div>
                     <div class="stat"><b>SPF</b><span>${data.spf.valid ? 'Found' : 'Missing'}</span></div>
                     <div class="stat"><b>DKIM</b><span>${data.dkim_selectors.length ? data.dkim_selectors.length + ' selector(s)' : 'None'}</span></div>
