@@ -635,14 +635,23 @@ function buildDmarc() {
     document.getElementById('dmarcFixNote').innerText = step.note;
     document.getElementById('dmarcFixOut').style.display = 'block';
     window._dmarcRec = rec;
+    window._dmarcFull =
+        `DMARC record to add for ${data.domain}:\n\n` +
+        `Record Type: TXT\n` +
+        `Host / Name / Subdomain: _dmarc   (just "_dmarc" — do NOT type the full domain name, or it will break)\n` +
+        `Value / Text / Data: ${rec}\n` +
+        `TTL: 3600 (or leave as the default)`;
 }
 
-function copyDmarc() {
-    const text = window._dmarcRec;
+function copyDmarc(btn) { copyText(window._dmarcRec, btn, 'Copy value'); }
+function copyDmarcAll(btn) { copyText(window._dmarcFull, btn, 'Copy all details'); }
+
+function copyText(text, btn, label) {
     if (!text) return;
     const done = () => {
-        const btns = document.querySelectorAll('#dmarcFixOut .btn');
-        if (btns.length) { btns[0].textContent = 'Copied ✓'; setTimeout(() => btns[0].textContent = 'Copy', 1500); }
+        if (!btn) return;
+        btn.textContent = 'Copied ✓';
+        setTimeout(() => { btn.textContent = label; }, 1500);
     };
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
@@ -702,11 +711,3 @@ function exportCSV() {
     csv += `CNAME Records,"${d.cname.join('; ')}"\n`;
     downloadFile(d.domain + '_audit.csv', csv, 'text/csv');
 }
-(function () {
-    const param = new URLSearchParams(window.location.search).get('domain');
-    if (!param) return;
-    const input = document.getElementById('domainIn');
-    if (!input) return;
-    input.value = param.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-    if (typeof runAudit === 'function') runAudit();
-})();

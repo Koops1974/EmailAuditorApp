@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Email Security Auditor</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
     <style>
@@ -310,7 +311,10 @@
                         <th>Value / Text / Data</th>
                         <td>
                             <code class="value-block" id="dmarcValue"></code>
-                            <button class="btn ghost cyan" style="margin-top:10px;padding:6px 16px;" onclick="copyDmarc()">Copy value</button>
+                            <div style="display:flex;gap:8px;margin-top:10px;">
+                                <button class="btn ghost cyan" style="padding:6px 16px;" onclick="copyDmarc(this)">Copy value</button>
+                                <button class="btn ghost cyan" style="padding:6px 16px;" onclick="copyDmarcAll(this)">Copy all details</button>
+                            </div>
                         </td>
                     </tr>
                     <tr><th>TTL</th><td><b>3600</b> <span class="muted" style="font-size:12px;">(or leave as the default)</span></td></tr>
@@ -353,6 +357,6 @@
     <footer>Email Security Auditor &nbsp;·&nbsp; Runs entirely in your browser via DNS-over-HTTPS</footer>
 </div>
 
-<script src="app.js?v=20261110a"></script>
+<script src="app.js?v=20261110b"></script>
 </body>
 </html>
