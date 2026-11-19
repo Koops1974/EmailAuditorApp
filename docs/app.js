@@ -211,8 +211,15 @@ function scoreAudit(d) {
 
 function buildRecommendation(d) {
     let rec = '';
-    if (d.score.provider_dkim)
-        rec += `<span class='${d.score.provider_dkim.startsWith('DKIM NOT') ? 'text-danger' : 'text-success'}'><b>${d.provider}:</b></span> ${d.score.provider_dkim}<br><br>`;
+    if (d.score.provider_dkim) {
+        const missing = d.score.provider_dkim.startsWith('DKIM NOT');
+        rec += `<span class='${missing ? 'text-danger' : 'text-success'}'><b>${d.provider}:</b></span> ${d.score.provider_dkim}`;
+        if (missing && d.provider === 'Microsoft 365')
+            rec += `<br><a href='https://security.microsoft.com/dkimv2' target='_blank' rel='noopener'><b>Enable DKIM in the Microsoft 365 security portal →</b></a> (Email & collaboration → Policies & rules → Threat policies → DKIM — select the domain, click Enable, then add the two CNAME records it shows to your DNS)`;
+        else if (missing && d.provider === 'Google Workspace')
+            rec += `<br><a href='https://admin.google.com/ac/apps/gmail/authenticateemail' target='_blank' rel='noopener'><b>Enable DKIM in the Google Admin console →</b></a> (Apps → Google Workspace → Gmail → Authenticate email — generate, then add the CNAME record to your DNS)`;
+        rec += '<br><br>';
+    }
 
     if (!d.dmarc.valid) {
         rec += "<span class='text-danger'>🔴 <b>CRITICAL:</b></span> No DMARC record found. Without DMARC, your domain is vulnerable to email spoofing attacks. <b>Action:</b> Create a DMARC record immediately (start with 'p=none' for monitoring).";
