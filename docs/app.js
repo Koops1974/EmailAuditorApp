@@ -642,12 +642,16 @@ function buildDmarc() {
     document.getElementById('dmarcFixNote').innerText = step.note;
     document.getElementById('dmarcFixOut').style.display = 'block';
     window._dmarcRec = rec;
+    const existing = data.dmarc.valid;
     window._dmarcFull =
-        `DMARC record to add for ${data.domain}:\n\n` +
-        `Record Type: TXT\n` +
-        `Host / Name / Subdomain: _dmarc   (just "_dmarc" — do NOT type the full domain name, or it will break)\n` +
-        `Value / Text / Data: ${rec}\n` +
-        `TTL: 3600 (or leave as the default)`;
+        `DMARC record ${existing ? 'to UPDATE (replace the existing record)' : 'to add'} for ${data.domain}:\n\n` +
+        `Record Type: TXT\n\n` +
+        `Host / Name / Subdomain: _dmarc\n` +
+        `(IMPORTANT: the host is an underscore character followed by dmarc - it MUST include the leading underscore. ` +
+        `Enter ONLY that in the host/name field - do NOT type the full domain name.)\n\n` +
+        `Value / Text / Data: ${rec}\n\n` +
+        `TTL: 3600 (or leave as the default - some providers, e.g. Fasthosts, do not allow TTL to be set)\n` +
+        (existing ? `\nNote: this domain already has a DMARC record. Please REPLACE the existing record with the value above - do not create a second one.` : '');
 }
 
 function copyDmarc(btn) { copyText(window._dmarcRec, btn, 'Copy value'); }
